@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    container_name: selective-sync
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      # Persist configuration and database
+      - ./data:/app/data
+      # Mount the host directory you want to sync TO
+      # Example: Syncing to your local Downloads folder
+      # - ~/Downloads:/sync/Downloads
+      - ./sync/:/sync/
+    environment:
+      - ENCRYPTION_KEY=change_this_to_a_random_string_min_32_bytes
+      # Optional: Pre-configure remote server
+      # - REMOTE_HOST=192.168.1.100
+      # - REMOTE_USER=myuser
+      # - REMOTE_PASSWORD=secret

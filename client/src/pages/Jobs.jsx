@@ -1,0 +1,347 @@
+import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { Activity, ArrowUp, Search, ChevronLeft, ChevronRight, Pause, Play, X, Trash2 } from 'lucide-react';
+import ModalBackdrop from '../components/ModalBackdrop';
+
+export default function Jobs() {
+    const [jobs, setJobs] = useState([]);
+    const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(25);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+
+    const fetchJobs = async () => {
+        try {
+            const params = new URLSearchParams({
+                page,
+                limit: itemsPerPage,
+                search
+            });
+            const res = await fetch(`http://localhost:3001/api/jobs?${params}`);
+            const data = await res.json();
+
+            if (data.pagination) {
+                setJobs(data.data);
+                setTotalPages(data.pagination.totalPages);
+                setTotalItems(data.pagination.total);
+            } else {
+                // Fallback for older API response if needed, though we just changed it
+                setJobs(data);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    useEffect(() => {
+        fetchJobs();
+        const interval = setInterval(fetchJobs, 2000); // Poll status
+        return () => clearInterval(interval);
+    }, [page, itemsPerPage, search]); // Re-fetch when params change
+
+    const setPriority = async (id, priority) => {
+        await fetch(`http://localhost:3001/api/jobs/${id}/priority`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ priority })
+        });
+        fetchJobs();
+    }
+
+    const updateJobStatus = async (id, action) => {
+        // action: 'cancel', 'pause', 'resume'
+        try {
+            await fetch(`http://localhost:3001/api/jobs/${id}/${action}`, {
+                method: 'POST'
+            });
+            fetchJobs();
+        } catch (err) {
+            console.error('Failed to update job status:', err);
+        }
+    };
+
+    // Reset page on search/limit change
+    useEffect(() => {
+        setPage(1);
+    }, [search, itemsPerPage]);
+
+    // Helpers
+    const formatBytes = (bytes) => {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
+    const formatDuration = (seconds) => {
+        if (!seconds) return '-';
+        if (seconds < 60) return `${Math.round(seconds)}s`;
+        const minutes = Math.floor(seconds / 60);
+        return `${minutes}m ${Math.round(seconds % 60)}s`;
+    };
+
+    const getProgress = (job) => {
+        if (!job.total_bytes || job.total_bytes === 0) return 0;
+        return Math.min(100, (job.processed_bytes / job.total_bytes) * 100);
+    };
+
+    const [failedItems, setFailedItems] = useState(null); // { jobId, items }
+
+    // Helpers
+    const getFailedItems = (job) => {
+        if (!job.failed_items) return [];
+        try {
+            return JSON.parse(job.failed_items);
+        } catch (e) {
+            return [];
+        }
+    };
+
+    return (
+        <div className="animate-enter">
+            {/* Modal for Failed Items */}
+            {failedItems && createPortal(
+                <ModalBackdrop onClose={() => setFailedItems(null)}>
+                    <div style={{ padding: 24, paddingBottom: 16 }}>
+                        <h2 style={{ fontSize: '1.2rem', marginBottom: 8 }}>Sync Failures</h2>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: 16, fontSize: '0.9em' }}>
+                            Success: Partial. The following files could not be synced.
+                        </p>
+
+                        <div style={{
+                            background: 'rgba(0,0,0,0.3)',
+                            borderRadius: 6,
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            maxHeight: '60vh',
+                            overflowY: 'auto',
+                            padding: 12
+                        }}>
+                            {failedItems.items.map((item, i) => (
+                                <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <div style={{ fontFamily: 'monospace', fontSize: '0.9em', color: 'var(--error)' }}>
+                                        {item.path}
+                                    </div>
+                                    <div style={{ fontSize: '0.8em', color: 'var(--text-muted)', marginTop: 2 }}>
+                                        {item.error}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'end', marginTop: 20 }}>
+                            <button className="btn btn-secondary" onClick={() => setFailedItems(null)}>
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </ModalBackdrop>,
+                document.body
+            )}
+
+            {/* ... Existing header/controls ... */}
+            <div className="header">
+                <h1 className="page-title">Job Monitor</h1>
+                <p style={{ color: 'var(--text-muted)' }}>Real-time sync activity and history.</p>
+            </div>
+
+            {/* Controls */}
+            <div className="card" style={{ marginBottom: 16, padding: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                        type="text"
+                        placeholder="Search logs, status, paths..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        style={{
+                            width: '100%', padding: '8px 12px 8px 36px',
+                            borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)',
+                            background: 'rgba(0,0,0,0.2)', color: 'white'
+                        }}
+                    />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: '0.9em', color: 'var(--text-muted)' }}>Rows:</span>
+                    <select
+                        value={itemsPerPage}
+                        onChange={e => setItemsPerPage(Number(e.target.value))}
+                        style={{
+                            padding: '6px 12px', borderRadius: 6,
+                            background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white'
+                        }}
+                    >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                    </select>
+                </div>
+            </div>
+
+            <div className="card">
+                <div className="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Type</th>
+                                <th style={{ width: '25%' }}>Progress</th>
+                                <th>Duration</th>
+                                <th>File/Folder</th>
+                                <th>Started</th>
+                                <th style={{ textAlign: 'right' }}>Priority</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {jobs.map(job => {
+                                const failedList = getFailedItems(job);
+                                const hasFailures = failedList.length > 0;
+
+                                return (
+                                    <tr key={job.id}>
+                                        <td>
+                                            <span className={`status-badge status-${job.status}`}>
+                                                {job.status}
+                                            </span>
+                                        </td>
+                                        <td>{job.type}</td>
+                                        <td>
+                                            {job.status === 'running' && job.total_bytes > 0 ? (
+                                                <div style={{ width: '100%' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8em', marginBottom: 4 }}>
+                                                        <span>{formatBytes(job.processed_bytes)} / {formatBytes(job.total_bytes)}</span>
+                                                        <span>{Math.round(getProgress(job))}%</span>
+                                                    </div>
+                                                    <div style={{ background: 'rgba(255,255,255,0.1)', height: 6, borderRadius: 3, overflow: 'hidden' }}>
+                                                        <div style={{
+                                                            width: `${getProgress(job)}%`,
+                                                            height: '100%',
+                                                            background: 'var(--primary)',
+                                                            transition: 'width 0.5s ease'
+                                                        }} />
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75em', marginTop: 4, color: 'var(--text-muted)' }}>
+                                                        <span>{job.current_speed ? `${formatBytes(job.current_speed)}/s` : '-'}</span>
+                                                        <span>{job.eta_seconds ? `~${formatDuration(job.eta_seconds)} left` : '-'}</span>
+                                                    </div>
+                                                </div>
+                                            ) : job.status === 'completed' ? (
+                                                <div style={{ fontSize: '0.85em', color: 'var(--success)' }}>
+                                                    {job.total_bytes > 0 && `Total: ${formatBytes(job.total_bytes)} `}
+                                                    {hasFailures && (
+                                                        <div style={{ marginTop: 4 }}>
+                                                            <span style={{ color: 'var(--error)', marginRight: 6 }}>
+                                                                ⚠ {failedList.length} failed
+                                                            </span>
+                                                            <button
+                                                                className="text-btn"
+                                                                style={{ textDecoration: 'underline', fontSize: 'inherit', color: 'rgba(255,255,255,0.7)' }}
+                                                                onClick={() => setFailedItems({ jobId: job.id, items: failedList })}
+                                                            >
+                                                                View
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span style={{ fontSize: '0.85em', color: 'var(--text-muted)' }}>{job.log}</span>
+                                            )}
+                                        </td>
+                                        <td style={{ fontSize: '0.9em', color: 'var(--text-muted)' }}>
+                                            {job.started_at && job.completed_at ? (
+                                                formatDuration((new Date(job.completed_at) - new Date(job.started_at)) / 1000)
+                                            ) : job.status === 'running' && job.started_at ? (
+                                                'Running...'
+                                            ) : '-'}
+                                        </td>
+                                        <td style={{ fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {job.remote_path || '-'}
+                                        </td>
+                                        <td style={{ fontSize: '0.9em' }}>
+                                            {job.started_at ? new Date(job.started_at).toLocaleString() : '-'}
+                                        </td>
+                                        <td style={{ textAlign: 'right' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                                                {job.status === 'running' && (
+                                                    <>
+                                                        <button onClick={() => updateJobStatus(job.id, 'pause')} className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem' }} title="Pause">
+                                                            <Pause size={14} />
+                                                        </button>
+                                                        <button onClick={() => updateJobStatus(job.id, 'cancel')} className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.8rem' }} title="Cancel">
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {job.status === 'paused' && (
+                                                    <>
+                                                        <button onClick={() => updateJobStatus(job.id, 'resume')} className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '0.8rem' }} title="Resume">
+                                                            <Play size={14} />
+                                                        </button>
+                                                        <button onClick={() => updateJobStatus(job.id, 'cancel')} className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.8rem' }} title="Cancel">
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {job.status === 'queued' && job.priority < 10 && (
+                                                    <>
+                                                        <button onClick={() => setPriority(job.id, 10)} className="btn btn-secondary" style={{ padding: '4px 8px' }} title="Prioritize">
+                                                            <ArrowUp size={14} />
+                                                        </button>
+                                                        <button onClick={() => updateJobStatus(job.id, 'cancel')} className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.8rem' }} title="Cancel">
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {job.status === 'queued' && job.priority >= 10 && (
+                                                    <button onClick={() => updateJobStatus(job.id, 'cancel')} className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.8rem' }} title="Cancel">
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                )}
+                                                {job.priority > 0 && job.status !== 'running' && <span style={{ fontSize: '0.8em', marginLeft: 8, alignSelf: 'center' }}>High</span>}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                            {jobs.length === 0 && (
+                                <tr>
+                                    <td colSpan={8} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
+                                        No jobs found matching your criteria.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Pagination Controls */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '0.9em', color: 'var(--text-muted)' }}>
+                        Showing {Math.min((page - 1) * itemsPerPage + 1, totalItems)} - {Math.min(page * itemsPerPage, totalItems)} of {totalItems}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                            disabled={page === 1}
+                            onClick={() => setPage(p => p - 1)}
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 12px' }}
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <button
+                            disabled={page >= totalPages}
+                            onClick={() => setPage(p => p + 1)}
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 12px' }}
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

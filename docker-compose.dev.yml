@@ -1,0 +1,37 @@
+services:
+  backend:
+    image: node:18-alpine
+    container_name: selective-sync-backend-dev
+    working_dir: /app/server
+    command: sh -c "apk add --no-cache python3 make g++ && npm install && npm run dev"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./server:/app/server
+      - ./data:/app/data
+      - ./sync:/app/sync
+      - /app/server/node_modules
+    environment:
+      - PORT=3001
+      - DATA_DIR=/app/data
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-default-dev-key-change-me-locally}
+      # Hot reload trigger: any change in ./server restarts nodemon
+
+  frontend:
+    image: node:22-alpine
+    container_name: selective-sync-frontend-dev
+    working_dir: /app/client
+    # Vite requires host binding to be accessible from outside container
+    command: sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client:/app/client
+      - /app/client/node_modules
+    environment:
+      - VITE_API_URL=http://backend:3001
+    depends_on:
+      - backend
+
+# Note: In dev mode, we don't build a single image. We use base node images and mount code.
+# Access app at http://localhost:5173
