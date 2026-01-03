@@ -164,6 +164,10 @@ button:disabled,
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .nav-item {
