@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, FileText, ArrowLeft, Download, X } from 'lucide-react';
 import ModalBackdrop from '../components/ModalBackdrop';
+import LocalBrowser from '../components/LocalBrowser';
 
 export default function Browser() {
     const [path, setPath] = useState('/');
@@ -13,7 +14,12 @@ export default function Browser() {
     const [localPath, setLocalPath] = useState('');
     const [isScheduled, setIsScheduled] = useState(true);
 
+    // New state for local browser
+    const [showLocalBrowser, setShowLocalBrowser] = useState(false);
+
     const [error, setError] = useState(null);
+    // Sync specific error (inline)
+    const [syncError, setSyncError] = useState(null);
 
     const [folderSizes, setFolderSizes] = useState({});
 
@@ -24,6 +30,7 @@ export default function Browser() {
     useEffect(() => {
         if (modalOpen) {
             fetch('http://localhost:3001/api/sync-locations').then(res => res.json()).then(setSyncLocations);
+            setSyncError(null); // Clear previous errors
         }
     }, [modalOpen]);
 
@@ -116,13 +123,7 @@ export default function Browser() {
     const handleSync = async () => {
         if (!localPath) return;
 
-        // If selecting a folder, we might want to append the folder name to the local path automatically? 
-        // Or assume the user selects the TARGET parent?
-        // Let's assume user selects the exact target path including the folder name.
-        // Actually, easiest UX: User selects "Download to...", e.g., /Users/me/Downloads
-        // And we append the item name: /Users/me/Downloads/FolderName
-        // But for now, let's just use the Input value as the full destination path.
-        // We can be smart: if the input path seems to be a common root, we append.
+        setSyncError(null);
 
         let finalLocalPath = localPath;
         // Simple heuristic: if using a preset, append name
@@ -148,10 +149,7 @@ export default function Browser() {
             setModalOpen(false);
             // Optional: show a toast or success check
         } catch (err) {
-            setError({
-                title: 'Sync Failed',
-                message: err.message
-            });
+            setSyncError(err.message);
         }
     };
 
@@ -273,7 +271,7 @@ export default function Browser() {
                 )}
             </div>
 
-            {/* Error Modal */}
+            {/* Error Modal (Global) */}
             {error && createPortal(
                 <ModalBackdrop onClose={() => setError(null)}>
                     <div className="card" style={{ width: 400, maxWidth: '90%', border: '1px solid var(--error)' }}>
@@ -323,17 +321,33 @@ export default function Browser() {
                                 ))}
                             </div>
 
-                            <input
-                                type="text"
-                                value={localPath}
-                                onChange={e => setLocalPath(e.target.value)}
-                                placeholder="/absolute/path/to/local/folder"
-                                style={{ width: '100%', padding: '12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'white' }}
-                            />
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <input
+                                    type="text"
+                                    value={localPath}
+                                    onChange={e => setLocalPath(e.target.value)}
+                                    placeholder="/absolute/path/to/local/folder"
+                                    style={{ flex: 1, padding: '12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'white' }}
+                                />
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowLocalBrowser(true)}
+                                    title="Browse Local Storage"
+                                    style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
+                                >
+                                    <Folder size={18} /> Browse
+                                </button>
+                            </div>
                             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 8 }}>
                                 Note: If you selected a preset location, the {selectedItem?.type || 'item'} "{selectedItem?.name}" will be created inside it.
                             </p>
                         </div>
+
+                        {syncError && (
+                            <div style={{ padding: '10px 14px', background: 'rgba(220, 38, 38, 0.1)', border: '1px solid var(--error)', borderRadius: 8, color: 'var(--error)', marginBottom: 20, fontSize: '0.9em' }}>
+                                ⚠ {syncError}
+                            </div>
+                        )}
 
                         <div style={{ marginBottom: 24, padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: 8 }}>
                             <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 12 }}>
@@ -356,10 +370,27 @@ export default function Browser() {
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
                             <button onClick={() => setModalOpen(false)} className="btn btn-secondary">Cancel</button>
-                            <button onClick={handleSync} className="btn btn-primary">Start Sync</button>
+                            <button
+                                onClick={handleSync}
+                                disabled={!localPath}
+                                className="btn btn-primary"
+                                style={{ opacity: !localPath ? 0.5 : 1, cursor: !localPath ? 'not-allowed' : 'pointer' }}
+                            >
+                                Start Sync
+                            </button>
                         </div>
                     </div>
                 </ModalBackdrop>,
+                document.body
+            )}
+
+            {/* Local Browser Modal */}
+            {showLocalBrowser && createPortal(
+                <LocalBrowser
+                    onClose={() => setShowLocalBrowser(false)}
+                    onSelect={(selectedPath) => setLocalPath(selectedPath)}
+                    currentPath={localPath || '/app'}
+                />,
                 document.body
             )}
         </div>

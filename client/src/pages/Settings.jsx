@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Save, Plus, X, Folder, FileText, ArrowLeft, Activity, Server, Globe, Settings as SettingsIcon } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
 import ToastContainer from '../components/Toast';
+import LocalBrowser from '../components/LocalBrowser';
 
 export default function Settings() {
     // --- Global Settings State ---
@@ -11,6 +12,7 @@ export default function Settings() {
         global_sync_enabled: true,
         connection_timeout_minutes: 60
     });
+    const [originalGlobalConfig, setOriginalGlobalConfig] = useState(null);
 
     // Explicit UI mode state for Custom Schedule
     const standardSchedules = ['* * * * *', '*/15 * * * *', '0 * * * *', '0 */6 * * *', '0 0 * * *'];
@@ -34,6 +36,7 @@ export default function Settings() {
     const [sshConfig, setSshConfig] = useState({
         host: '', port: 22, username: '', password: '', privateKey: ''
     });
+    const [originalSshConfig, setOriginalSshConfig] = useState(null);
     const [hasPass, setHasPass] = useState(false);
     // sshStatus removed in favor of Toast
 
@@ -62,10 +65,13 @@ export default function Settings() {
             fetch('http://localhost:3001/api/sync-locations').then(res => res.json())
         ]).then(([settingsData, sshData, locData]) => {
             setGlobalConfig(settingsData);
+            setOriginalGlobalConfig(settingsData);
             // check if loaded schedule is non-standard
             setIsCustomMode(!standardSchedules.includes(settingsData.sync_schedule));
 
-            setSshConfig(prev => ({ ...prev, ...sshData, password: '', privateKey: '' }));
+            const loadedSsh = { ...sshData, password: '', privateKey: '' };
+            setSshConfig(prev => ({ ...prev, ...loadedSsh }));
+            setOriginalSshConfig(prev => ({ ...prev, ...loadedSsh }));
             setHasPass(sshData.hasPassword);
             setLocations(locData);
         }).catch(err => console.error(err))
@@ -84,6 +90,7 @@ export default function Settings() {
             });
             // Update local state if we saved an override
             if (overrideConfig) setGlobalConfig(overrideConfig);
+            setOriginalGlobalConfig(configToSave);
 
             addToast('Settings saved successfully!', 'success');
         } catch (err) {
@@ -144,6 +151,7 @@ export default function Settings() {
             const data = await res.json();
 
             if (data.success) {
+                setOriginalSshConfig(sshConfig);
                 addToast(data.message, 'success');
             } else {
                 if (!skipTest && data.type === 'CONNECTION_FAILED') {
@@ -235,7 +243,7 @@ export default function Settings() {
                             {/* Toggle */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                                 <div>
-                                    <h3 style={{ fontSize: '1.1rem', marginBottom: 4 }}>Global Sync</h3>
+                                    <h3 style={{ fontSize: '1.1rem', marginBottom: 4 }}>Scheduled Sync</h3>
                                     <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Master switch for all scheduled operations.</p>
                                 </div>
                                 <div
@@ -322,7 +330,11 @@ export default function Settings() {
                             </div>
 
                             <div style={{ paddingTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16 }}>
-                                <button className="btn btn-primary" onClick={() => handleSaveGlobal()} disabled={globalSaving}>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={() => handleSaveGlobal()}
+                                    disabled={globalSaving || (originalGlobalConfig && JSON.stringify(globalConfig) === JSON.stringify(originalGlobalConfig))}
+                                >
                                     {globalSaving ? <span className="spin"><Save size={16} /></span> : <Save size={16} />}
                                     <span>Save Policy</span>
                                 </button>
@@ -386,7 +398,11 @@ export default function Settings() {
                                 >
                                     <Activity size={18} /> Test Connection
                                 </button>
-                                <button type="submit" className="btn btn-primary">
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={originalSshConfig && JSON.stringify(sshConfig) === JSON.stringify(originalSshConfig)}
+                                >
                                     <Save size={18} /> Save SSH Config
                                 </button>
                             </div>
@@ -409,7 +425,7 @@ export default function Settings() {
                             <button onClick={() => setBrowserOpen(true)} className="btn btn-secondary" style={{ whiteSpace: 'nowrap' }}>
                                 <Folder size={18} /> Browse
                             </button>
-                            <button onClick={addLocation} className="btn btn-primary"><Plus size={18} /></button>
+                            <button onClick={() => addLocation()} className="btn btn-primary" disabled={!newLoc.trim()}><Plus size={18} /></button>
                         </div>
                         <div>
                             {locations.map(loc => (
@@ -432,9 +448,10 @@ export default function Settings() {
 
             {/* Local Browser Modal */}
             {browserOpen && createPortal(
-                <LocalBrowserModal
+                <LocalBrowser
+                    currentPath={newLoc || '/app'}
                     onSelect={(path) => {
-                        addLocation(path);
+                        setNewLoc(path);
                         setBrowserOpen(false);
                     }}
                     onClose={() => setBrowserOpen(false)}
@@ -443,107 +460,6 @@ export default function Settings() {
             )}
 
             <ToastContainer toasts={toasts} removeToast={removeToast} />
-        </div>
-    );
-}
-
-function LocalBrowserModal({ onSelect, onClose }) {
-    const [path, setPath] = useState('/app'); // Start at typical docker app root
-    const [files, setFiles] = useState([]);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        const handleEsc = (e) => {
-            if (e.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', handleEsc);
-        return () => window.removeEventListener('keydown', handleEsc);
-    }, [onClose]);
-
-    useEffect(() => {
-        fetchFiles(path);
-    }, [path]);
-
-    const fetchFiles = async (p) => {
-        setLoading(true);
-        try {
-            const res = await fetch(`http://localhost:3001/api/local/list?path=${encodeURIComponent(p)}`);
-            const data = await res.json();
-            if (res.ok) setFiles(data);
-            else console.error(data);
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleUp = () => {
-        if (path === '/') return;
-        const parent = path.substring(0, path.lastIndexOf('/')) || '/';
-        setPath(parent);
-    };
-
-    return (
-        <div
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose();
-            }}
-            style={{
-                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-            }}
-        >
-            <div className="card" style={{ width: 600, maxWidth: '90%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <h3>Select Folder</h3>
-                    <button onClick={onClose}><X size={20} /></button>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, padding: '8px', background: 'rgba(0,0,0,0.2)', borderRadius: 6 }}>
-                    <button onClick={handleUp} disabled={path === '/'} style={{ opacity: path === '/' ? 0.3 : 1 }}>
-                        <ArrowLeft size={16} />
-                    </button>
-                    <code style={{ fontSize: '0.9em', wordBreak: 'break-all' }}>{path}</code>
-                </div>
-
-                <div style={{ flex: 1, overflowY: 'auto', minHeight: 300, border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                    {loading ? <div style={{ padding: 20 }}>Loading...</div> : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <tbody>
-                                {files.map(file => (
-                                    <tr key={file.name} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <td style={{ padding: '8px 12px', width: 40 }}>
-                                            {file.type === 'folder' ? <Folder color="var(--primary)" size={18} /> : <FileText color="var(--text-muted)" size={18} />}
-                                        </td>
-                                        <td style={{ padding: '8px 12px' }}>
-                                            {file.type === 'folder' ? (
-                                                <button onClick={() => setPath(file.path)} style={{ textAlign: 'left', fontWeight: 500, color: 'var(--text-main)', width: '100%' }}>
-                                                    {file.name}
-                                                </button>
-                                            ) : (
-                                                <span style={{ color: 'var(--text-muted)' }}>{file.name}</span>
-                                            )}
-                                        </td>
-                                        <td style={{ textAlign: 'right', padding: '8px' }}>
-                                            {file.type === 'folder' && (
-                                                <button
-                                                    onClick={() => onSelect(file.path)}
-                                                    className="btn btn-secondary"
-                                                    style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                                                >
-                                                    Select
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            </div>
         </div>
     );
 }

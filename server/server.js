@@ -164,22 +164,24 @@ app.get('/api/local/list', async (req, res) => {
     const localPath = req.query.path || '/app'; // Default to /app
     try {
         const items = await fs.readdir(localPath, { withFileTypes: true });
-        const files = await Promise.all(items.map(async (item) => {
-            const fullPath = path.join(localPath, item.name);
-            let size = 0;
-            if (item.isFile()) {
-                try {
-                    const stats = await fs.stat(fullPath);
-                    size = stats.size;
-                } catch (e) { /* ignore */ }
-            }
-            return {
-                name: item.name,
-                type: item.isDirectory() ? 'folder' : 'file',
-                path: fullPath,
-                size: size
-            };
-        }));
+        const files = await Promise.all(items
+            .filter(item => item.name !== '.DS_Store')
+            .map(async (item) => {
+                const fullPath = path.join(localPath, item.name);
+                let size = 0;
+                if (item.isFile()) {
+                    try {
+                        const stats = await fs.stat(fullPath);
+                        size = stats.size;
+                    } catch (e) { /* ignore */ }
+                }
+                return {
+                    name: item.name,
+                    type: item.isDirectory() ? 'folder' : 'file',
+                    path: fullPath,
+                    size: size
+                };
+            }));
 
         // Sort folders first
         files.sort((a, b) => {
