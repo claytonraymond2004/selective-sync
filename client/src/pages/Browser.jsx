@@ -11,6 +11,7 @@ export default function Browser() {
     const [modalOpen, setModalOpen] = useState(false);
     const [syncLocations, setSyncLocations] = useState([]);
     const [localPath, setLocalPath] = useState('');
+    const [isScheduled, setIsScheduled] = useState(true);
 
     const [error, setError] = useState(null);
 
@@ -108,6 +109,7 @@ export default function Browser() {
     const openSyncModal = (item) => {
         setSelectedItem(item);
         setLocalPath('');
+        setIsScheduled(true);
         setModalOpen(true);
     };
 
@@ -136,7 +138,8 @@ export default function Browser() {
                 body: JSON.stringify({
                     remotePath: selectedItem.path,
                     localPath: finalLocalPath,
-                    type: selectedItem.type
+                    type: selectedItem.type,
+                    active: isScheduled
                 })
             });
             const data = await res.json();
@@ -330,6 +333,25 @@ export default function Browser() {
                             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 8 }}>
                                 Note: If you selected a preset location, the {selectedItem?.type || 'item'} "{selectedItem?.name}" will be created inside it.
                             </p>
+                        </div>
+
+                        <div style={{ marginBottom: 24, padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: 8 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 12 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={isScheduled}
+                                    onChange={e => setIsScheduled(e.target.checked)}
+                                    style={{ width: 18, height: 18, accentColor: 'var(--primary)' }}
+                                />
+                                <div>
+                                    <span style={{ display: 'block', fontWeight: 500 }}>Enable Auto-Sync</span>
+                                    <span style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                        {isScheduled
+                                            ? "Item will be checked for updates according to the global schedule."
+                                            : "This will be a one-time sync. You can enable auto-sync later."}
+                                    </span>
+                                </div>
+                            </label>
                         </div>
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>

@@ -244,8 +244,8 @@ app.post('/api/sync', (req, res) => {
             }
         }
 
-        const info = db.prepare('INSERT INTO sync_items (remote_path, local_path, type) VALUES (?, ?, ?)')
-            .run(remotePath, localPath, type);
+        const info = db.prepare('INSERT INTO sync_items (remote_path, local_path, type, active) VALUES (?, ?, ?, ?)')
+            .run(remotePath, localPath, type, req.body.active !== false ? 1 : 0);
 
         // Trigger initial sync job
         const jobId = uuid.v4();
