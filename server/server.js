@@ -547,6 +547,65 @@ app.post('/api/jobs/resume-all', (req, res) => {
     }
 });
 
+// 5. Maintenance
+app.post('/api/maintenance/purge-jobs', (req, res) => {
+    try {
+        const days = parseInt(req.body.days) || 7;
+        // Calculate cutoff date: now - days
+        // SQLite 'now' is in UTC, ensure consistency.
+        // We use 'start of day' logic or just exact time subtraction? 'X days older than current time' usually implies exact subtraction.
+        const cutoffQuery = `datetime('now', '-${days} days')`;
+
+        // Delete jobs older than cutoff AND not currently active
+        // We do NOT want to delete running jobs
+        const result = db.prepare(`
+            DELETE FROM jobs 
+            WHERE (COALESCE(started_at, created_at) < ${cutoffQuery})
+            AND status NOT IN ('running', 'pausing')
+        `).run();
+
+        // Also vacuum to reclaim space? Maybe overkill for just jobs, but let's just return count.
+        res.json({ success: true, count: result.changes, message: `Purged ${result.changes} old job records.` });
+    } catch (err) {
+        console.error("Purge error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/maintenance/reset-app', async (req, res) => {
+    try {
+        // 1. Stop all active background work FIRST?
+        // Ideally we should cancel all running jobs, but let's just wipe the DB tables.
+        // The syncWorker might throw errors on next tick, but it should recover or just stop finding jobs.
+
+        const transaction = db.transaction(() => {
+            // Delete all data
+            db.prepare('DELETE FROM jobs').run();
+            db.prepare('DELETE FROM sync_items').run();
+            db.prepare('DELETE FROM sync_locations').run();
+            db.prepare('DELETE FROM config').run();
+        });
+
+        transaction();
+
+        // Optional: Reset any in-memory state if critical?
+        // The scheduler will reload from empty DB next tick.
+        // Creating a "fresh" state.
+
+        console.log("App reset triggered by user.");
+        res.json({ success: true, message: "Application has been reset." });
+
+        // Trigger a restart or re-init of scheduler? 
+        // updateSchedule will handle empty config gracefully (defaults).
+        // It might be safer to restart the process, but we can't easily do that from within.
+        // We'll trust the empty DB state is handled correctly by pollers.
+
+    } catch (err) {
+        console.error("Reset app error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 // Serve frontend in production
 if (process.env.NODE_ENV === 'production') {

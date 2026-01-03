@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Save, Plus, X, Folder, FileText, ArrowLeft, Activity, Server, Globe, Settings as SettingsIcon } from 'lucide-react';
+import { Save, Plus, X, Folder, FileText, ArrowLeft, Activity, Server, Globe, Settings as SettingsIcon, Trash2, AlertTriangle } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
 import ToastContainer from '../components/Toast';
 import LocalBrowser from '../components/LocalBrowser';
+import { useNavigate } from 'react-router-dom';
 
 // Helper to normalize config for comparison (ensures key order/subset)
 const normalizeGlobal = (c) => ({
@@ -21,6 +22,7 @@ const normalizeSSH = (c) => ({
 });
 
 export default function Settings() {
+    const navigate = useNavigate();
     // --- Global Settings State ---
     const [globalConfig, setGlobalConfig] = useState({
         sync_schedule: '0 * * * *',
@@ -63,6 +65,10 @@ export default function Settings() {
     const [locations, setLocations] = useState([]);
     const [newLoc, setNewLoc] = useState('');
     const [browserOpen, setBrowserOpen] = useState(false);
+
+    // --- Maintenance State ---
+    const [purgeDays, setPurgeDays] = useState(7);
+
 
     // --- Common State ---
     const [loading, setLoading] = useState(true);
@@ -252,6 +258,53 @@ export default function Settings() {
             onConfirm: async () => {
                 await fetch(`http://localhost:3001/api/sync-locations/${id}`, { method: 'DELETE' });
                 fetchLocations();
+                setModalConfig(prev => ({ ...prev, isOpen: false }));
+            }
+        });
+    };
+
+    // --- Maintenance Handlers ---
+    const handlePurgeHistory = async () => {
+        try {
+            const res = await fetch('http://localhost:3001/api/maintenance/purge-jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ days: purgeDays })
+            });
+            const data = await res.json();
+            if (data.success) {
+                addToast(data.message, 'success');
+            } else {
+                addToast('Purge failed: ' + data.error, 'error');
+            }
+        } catch (err) {
+            addToast('Purge error: ' + err.message, 'error');
+        }
+    };
+
+    const handleResetApp = () => {
+        setModalConfig({
+            isOpen: true,
+            title: 'Reset Application?',
+            message: 'This will DELETE ALL data including:\n- Sync Items\n- Job History\n- Settings & Credentials\n- Favorite Paths\n\nThe application will be returned to a fresh state. This action cannot be undone.',
+            confirmLabel: 'RESET EVERYTHING',
+            isDestructive: true,
+            isWarning: true,
+            onConfirm: async () => {
+                try {
+                    const res = await fetch('http://localhost:3001/api/maintenance/reset-app', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        addToast('Application reset successfully. Reloading...', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        addToast('Reset failed: ' + data.error, 'error');
+                    }
+                } catch (err) {
+                    addToast('Reset error: ' + err.message, 'error');
+                }
                 setModalConfig(prev => ({ ...prev, isOpen: false }));
             }
         });
@@ -651,6 +704,61 @@ export default function Settings() {
                                     </button>
                                 </div>
                             ))}
+                        </div>
+                    </div>
+
+                    {/* --- SECTION 4: MAINTENANCE --- */}
+                    <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                        <h2 style={{ marginBottom: 24, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-main)' }}>
+                            <Trash2 size={20} color="var(--danger)" /> Maintenance
+                        </h2>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                            {/* Purge Jobs */}
+                            <div>
+                                <h3 style={{ fontSize: '1.1rem', marginBottom: 4 }}>Purge Job History</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: 12 }}>
+                                    Remove completed job logs older than the specified number of days.
+                                </p>
+                                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>Days to keep</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={purgeDays}
+                                            onChange={e => setPurgeDays(parseInt(e.target.value) || 0)}
+                                            style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'white' }}
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={handlePurgeHistory}
+                                        className="btn btn-primary"
+                                        style={{ marginTop: 20 }}
+                                    >
+                                        Purge
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}></div>
+
+                            {/* Reset App */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div>
+                                    <h3 style={{ fontSize: '1.1rem', marginBottom: 4, color: 'var(--danger)' }}>Reset Application</h3>
+                                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                                        DANGER: Wipes all database data, settings, and credentials.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleResetApp}
+                                    className="btn btn-danger"
+                                    style={{ background: 'rgba(220, 38, 38, 0.2)', color: '#fca5a5', border: '1px solid rgba(220, 38, 38, 0.5)' }}
+                                >
+                                    <AlertTriangle size={16} /> Reset Everything
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
