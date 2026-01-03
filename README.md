@@ -16,7 +16,7 @@ A modern web application to sync folders from a remote server to your local file
 
 1. **Edit `docker-compose.yml`**:
    - Set a secure `ENCRYPTION_KEY`.
-   - Mount your local directories to the container (e.g., `- ~/Downloads:/sync/Downloads`) so that the app can write files to your actual host system.
+   - Mount your local directories to the container inside the `/app/` directory (e.g., `- ~/Downloads:/app/Downloads`) since that's where the local browser file explorer modals default to.
 
 2. **Run**:
    ```bash
