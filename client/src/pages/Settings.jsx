@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Save, Plus, X, Folder, FileText, ArrowLeft, Activity, Server, Globe, Settings as SettingsIcon } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
+import ToastContainer from '../components/Toast';
 
 export default function Settings() {
     // --- Global Settings State ---
@@ -15,14 +16,25 @@ export default function Settings() {
     const [isCustomMode, setIsCustomMode] = useState(false);
 
     const [globalSaving, setGlobalSaving] = useState(false);
-    const [globalMessage, setGlobalMessage] = useState(null);
+
+    // --- Toast State ---
+    const [toasts, setToasts] = useState([]);
+
+    const addToast = (message, type = 'success', duration = 5000) => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, message, type, duration }]);
+    };
+
+    const removeToast = (id) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+    };
 
     // --- SSH Config State ---
     const [sshConfig, setSshConfig] = useState({
         host: '', port: 22, username: '', password: '', privateKey: ''
     });
     const [hasPass, setHasPass] = useState(false);
-    const [sshStatus, setSshStatus] = useState('');
+    // sshStatus removed in favor of Toast
 
     // --- Sync Locations State ---
     const [locations, setLocations] = useState([]);
@@ -68,10 +80,9 @@ export default function Settings() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(globalConfig)
             });
-            setGlobalMessage({ type: 'success', text: 'Settings saved successfully!' });
-            setTimeout(() => setGlobalMessage(null), 3000);
+            addToast('Settings saved successfully!', 'success');
         } catch (err) {
-            setGlobalMessage({ type: 'error', text: 'Failed to save settings: ' + err.message });
+            addToast('Failed to save settings: ' + err.message, 'error');
         } finally {
             setGlobalSaving(false);
         }
@@ -100,7 +111,7 @@ export default function Settings() {
     // --- SSH Config Handlers ---
     const handleTestConnection = async (e) => {
         e.preventDefault();
-        setSshStatus('Testing connection...');
+        addToast('Testing connection...', 'warning', 2000);
         try {
             const res = await fetch('http://localhost:3001/api/config/test', {
                 method: 'POST',
@@ -108,16 +119,16 @@ export default function Settings() {
                 body: JSON.stringify(sshConfig)
             });
             const data = await res.json();
-            if (data.success) setSshStatus('Success: ' + data.message);
-            else setSshStatus('Error: ' + data.error);
+            if (data.success) addToast('Connection successful!', 'success');
+            else addToast('Connection failed: ' + data.error, 'error');
         } catch (err) {
-            setSshStatus('Error: ' + err.message);
+            addToast('Connection error: ' + err.message, 'error');
         }
     };
 
     const handleSaveSSH = async (e, skipTest = false) => {
         if (e) e.preventDefault();
-        setSshStatus(skipTest ? 'Saving (skipping test)...' : 'Verifying & Saving...');
+        if (!skipTest) addToast('Verifying connection...', 'warning', 2000);
 
         try {
             const res = await fetch('http://localhost:3001/api/config', {
@@ -128,18 +139,17 @@ export default function Settings() {
             const data = await res.json();
 
             if (data.success) {
-                setSshStatus('Success: ' + data.message);
+                addToast(data.message, 'success');
             } else {
                 if (!skipTest && data.type === 'CONNECTION_FAILED') {
                     setSaveErrorMessage(data.error);
                     setConfirmSaveOpen(true);
-                    setSshStatus('Error: Verify Failed');
                 } else {
-                    setSshStatus('Error: ' + data.error);
+                    addToast('Error saving: ' + data.error, 'error');
                 }
             }
         } catch (err) {
-            setSshStatus('Error: ' + err.message);
+            addToast('Error: ' + err.message, 'error');
         }
     };
 
@@ -292,11 +302,6 @@ export default function Settings() {
                                     {globalSaving ? <span className="spin"><Save size={16} /></span> : <Save size={16} />}
                                     <span>Save Policy</span>
                                 </button>
-                                {globalMessage && (
-                                    <span style={{ color: globalMessage.type === 'error' ? 'var(--error)' : 'var(--success)', fontSize: '0.9rem' }}>
-                                        {globalMessage.text}
-                                    </span>
-                                )}
                             </div>
                         </div>
                     </div>
@@ -360,7 +365,6 @@ export default function Settings() {
                                 <button type="submit" className="btn btn-primary">
                                     <Save size={18} /> Save SSH Config
                                 </button>
-                                {sshStatus && <span style={{ marginLeft: 8, color: sshStatus.startsWith('Error') ? 'var(--error)' : 'var(--success)' }}>{sshStatus}</span>}
                             </div>
                         </form>
                     </div>
@@ -410,6 +414,8 @@ export default function Settings() {
                 />,
                 document.body
             )}
+
+            <ToastContainer toasts={toasts} removeToast={removeToast} />
         </div>
     );
 }
