@@ -442,8 +442,16 @@ async function checkItemDiff(itemId) {
         conn.end();
 
         if (plan.files.length > 0) {
+            // If restored but outdated, still clear the specific missing error
+            if (item.error_message === 'Local file/folder missing. Sync disabled due to local deletion.') {
+                db.prepare("UPDATE sync_items SET status = 'synced', error_message = NULL WHERE id = ?").run(item.id);
+            }
             return { status: 'outdated', diffCount: plan.files.length, diffSize: plan.totalBytes };
         } else {
+            // Fully synced + recovered
+            if (item.error_message === 'Local file/folder missing. Sync disabled due to local deletion.') {
+                db.prepare("UPDATE sync_items SET status = 'synced', error_message = NULL WHERE id = ?").run(item.id);
+            }
             return { status: 'synced' };
         }
 
