@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FileText, ArrowLeft, Download, X } from 'lucide-react';
+import { Folder, FileText, ArrowUp, Download, X, ChevronUp, ChevronDown } from 'lucide-react';
 import ModalBackdrop from '../components/ModalBackdrop';
 import LocalBrowser from '../components/LocalBrowser';
 
@@ -23,8 +23,49 @@ export default function Browser() {
 
     const [folderSizes, setFolderSizes] = useState({});
 
+    // UI state
+    const [highlightedPath, setHighlightedPath] = useState(null);
+    const [filterQuery, setFilterQuery] = useState('');
+    const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
+
+    // Filter AND Sort files - Defined here to be available for useEffect
+    const filteredFiles = files
+        .filter(file => file.name.toLowerCase().startsWith(filterQuery.toLowerCase()))
+        .sort((a, b) => {
+            if (a.type !== b.type) {
+                return a.type === 'folder' ? -1 : 1;
+            }
+
+            let aValue, bValue;
+
+            if (sortConfig.key === 'size') {
+                aValue = a.type === 'folder' ? (folderSizes[a.path] || 0) : a.size;
+                bValue = b.type === 'folder' ? (folderSizes[b.path] || 0) : b.size;
+            } else {
+                aValue = a[sortConfig.key];
+                bValue = b[sortConfig.key];
+            }
+
+            if (typeof aValue === 'string') {
+                aValue = aValue.toLowerCase();
+                bValue = bValue.toLowerCase();
+            }
+
+            if (aValue < bValue) {
+                return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+
+    const searchInputRef = useRef(null);
+
     useEffect(() => {
         fetchFiles(path);
+        setHighlightedPath(null);
+        setFilterQuery('');
     }, [path]);
 
     useEffect(() => {
@@ -33,6 +74,94 @@ export default function Browser() {
             setSyncError(null); // Clear previous errors
         }
     }, [modalOpen]);
+
+    // Global Key Listener for Search Auto-Focus and Navigation
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Check if user is already typing in an input or textarea
+            const isInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) || document.activeElement.isContentEditable;
+
+            // If in an input (other than our search ref, but search ref handles its own via prop), ignore global nav
+            if (isInput) return;
+
+            // Navigation: Up/Down/Enter/Backspace
+            if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+                e.preventDefault();
+                // Ensure focus returns to the list navigation if a button was focused
+                if (document.activeElement.tagName === 'BUTTON') {
+                    document.activeElement.blur();
+                }
+
+                if (filteredFiles.length === 0) return;
+
+                if (e.key === 'Home') {
+                    setHighlightedPath(filteredFiles[0].path);
+                    return;
+                }
+                if (e.key === 'End') {
+                    setHighlightedPath(filteredFiles[filteredFiles.length - 1].path);
+                    return;
+                }
+
+                const currentIndex = filteredFiles.findIndex(f => f.path === highlightedPath);
+                let newIndex;
+
+                if (e.key === 'ArrowDown') {
+                    if (currentIndex === -1) {
+                        newIndex = 0;
+                    } else {
+                        newIndex = currentIndex < filteredFiles.length - 1 ? currentIndex + 1 : currentIndex;
+                    }
+                } else {
+                    // ArrowUp
+                    if (currentIndex === -1) {
+                        newIndex = filteredFiles.length - 1;
+                    } else {
+                        newIndex = currentIndex > 0 ? currentIndex - 1 : 0;
+                    }
+                }
+                setHighlightedPath(filteredFiles[newIndex].path);
+                return;
+            }
+
+            if (e.key === 'Enter') {
+                if (document.activeElement.tagName === 'BUTTON') return;
+                const currentIndex = filteredFiles.findIndex(f => f.path === highlightedPath);
+                // If nothing highlighted, maybe enter first item? Or do nothing? 
+                // Let's match expected behavior: if highlighted, act.
+                if (currentIndex !== -1) {
+                    e.preventDefault();
+                    const file = filteredFiles[currentIndex];
+                    if (file.type === 'folder') {
+                        handleNavigate(file.path);
+                    }
+                    // Files: do nothing (Tab requirement)
+                }
+                return;
+            }
+
+            if (e.key === 'Backspace') {
+                e.preventDefault();
+                handleUp();
+                return;
+            }
+
+            // Auto-Focus: Ignore special keys (ctrl, alt, meta) and non-character keys
+            if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) {
+                return;
+            }
+
+            // If it's a valid character, focus the search input
+            if (/^[a-zA-Z0-9]$/.test(e.key)) {
+                if (searchInputRef.current) {
+                    searchInputRef.current.focus();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [filteredFiles, highlightedPath, path]); // Dependencies for closure
 
     const fetchFiles = async (p) => {
         setLoading(true);
@@ -166,105 +295,293 @@ export default function Browser() {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
     };
 
+    const formatDate = (ts) => {
+        if (!ts) return '-';
+        return new Date(ts).toLocaleString();
+    };
+
+    const handleSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+
+
+    const SortIcon = ({ columnKey }) => {
+        if (sortConfig.key !== columnKey) return <div style={{ width: 16 }} />; // spacer
+        return sortConfig.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />;
+    };
+
+    const handleInputKeyDown = (e) => {
+        if (e.key === 'Escape') {
+            e.currentTarget.blur();
+            return;
+        }
+
+        if (filteredFiles.length === 0) return;
+
+        const currentIndex = filteredFiles.findIndex(f => f.path === highlightedPath);
+
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            e.currentTarget.blur();
+        } else if (e.key === 'Backspace' && filterQuery === '') {
+            e.preventDefault();
+            handleUp();
+        } else if (e.key === 'Tab') {
+            e.preventDefault();
+            const targetIndex = currentIndex !== -1 ? currentIndex : 0;
+            const btn = document.getElementById(`sync-btn-${targetIndex}`);
+            if (btn) btn.focus();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const file = currentIndex !== -1 ? filteredFiles[currentIndex] : filteredFiles[0];
+            if (file) {
+                if (file.type === 'folder') {
+                    handleNavigate(file.path);
+                }
+                // For files, do nothing. User must Tab to sync.
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (highlightedPath) {
+            const index = filteredFiles.findIndex(f => f.path === highlightedPath);
+            if (index !== -1) {
+                const el = document.getElementById(`file-row-${index}`);
+                if (el) {
+                    el.scrollIntoView({ block: 'nearest' });
+                }
+            }
+        }
+    }, [highlightedPath, filteredFiles]);
+
+    const headerStyle = { cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 6 };
+
     return (
         <div className="animate-enter">
             {/* ... header ... */}
             <div className="header">
-                <h1 className="page-title">Remote Browser</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, color: 'var(--text-muted)' }}>
-                    <button onClick={handleUp} disabled={path === '/'} style={{ opacity: path === '/' ? 0.3 : 1 }}>
-                        <ArrowLeft size={16} color="white" />
-                    </button>
-                    <div className="breadcrumbs" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        <button
-                            onClick={() => handleNavigate('/')}
-                            style={{
-                                background: path === '/' ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                                padding: '4px 12px',
-                                borderRadius: 16,
-                                fontSize: '0.85em',
-                                color: 'white',
-                                border: 'none',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={e => path !== '/' && (e.target.style.background = 'rgba(255,255,255,0.2)')}
-                            onMouseLeave={e => path !== '/' && (e.target.style.background = 'rgba(255,255,255,0.1)')}
-                        >
-                            root
-                        </button>
-                        {path.split('/').filter(Boolean).map((segment, index, arr) => {
-                            const segmentPath = '/' + arr.slice(0, index + 1).join('/');
-                            const isLast = index === arr.length - 1;
-                            return (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                        <h1 className="page-title">Remote Browser</h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, color: 'var(--text-muted)' }}>
+                            <button
+                                onClick={handleUp}
+                                disabled={path === '/'}
+                                style={{
+                                    opacity: path === '/' ? 0.3 : 1,
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    borderRadius: 6,
+                                    padding: 6,
+                                    cursor: path === '/' ? 'default' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <ArrowUp size={16} color="white" />
+                            </button>
+                            <div className="breadcrumbs" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                                 <button
-                                    key={segmentPath}
-                                    onClick={() => handleNavigate(segmentPath)}
-                                    disabled={isLast}
+                                    onClick={() => handleNavigate('/')}
                                     style={{
-                                        background: isLast ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
+                                        background: path === '/' ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
                                         padding: '4px 12px',
                                         borderRadius: 16,
                                         fontSize: '0.85em',
                                         color: 'white',
                                         border: 'none',
-                                        cursor: isLast ? 'default' : 'pointer',
-                                        transition: 'all 0.2s',
-                                        maxWidth: 200,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap'
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
                                     }}
-                                    onMouseEnter={e => !isLast && (e.target.style.background = 'rgba(255,255,255,0.2)')}
-                                    onMouseLeave={e => !isLast && (e.target.style.background = 'rgba(255,255,255,0.1)')}
+                                    onMouseEnter={e => path !== '/' && (e.target.style.background = 'rgba(255,255,255,0.2)')}
+                                    onMouseLeave={e => path !== '/' && (e.target.style.background = 'rgba(255,255,255,0.1)')}
                                 >
-                                    {segment}
+                                    root
                                 </button>
-                            );
-                        })}
+                                {path.split('/').filter(Boolean).map((segment, index, arr) => {
+                                    const segmentPath = '/' + arr.slice(0, index + 1).join('/');
+                                    const isLast = index === arr.length - 1;
+                                    return (
+                                        <button
+                                            key={segmentPath}
+                                            onClick={() => handleNavigate(segmentPath)}
+                                            disabled={isLast}
+                                            style={{
+                                                background: isLast ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
+                                                padding: '4px 12px',
+                                                borderRadius: 16,
+                                                fontSize: '0.85em',
+                                                color: 'white',
+                                                border: 'none',
+                                                cursor: isLast ? 'default' : 'pointer',
+                                                transition: 'all 0.2s',
+                                                maxWidth: 200,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                            onMouseEnter={e => !isLast && (e.target.style.background = 'rgba(255,255,255,0.2)')}
+                                            onMouseLeave={e => !isLast && (e.target.style.background = 'rgba(255,255,255,0.1)')}
+                                        >
+                                            {segment}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
+
+
                 </div>
             </div>
 
             <div className="card">
+                <div style={{ position: 'relative', width: '100%', marginBottom: 16 }}>
+                    <input
+                        ref={searchInputRef}
+                        type="text"
+                        placeholder="Filter files..."
+                        value={filterQuery}
+                        onChange={e => setFilterQuery(e.target.value)}
+                        onKeyDown={handleInputKeyDown}
+                        style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            paddingRight: 32,
+                            borderRadius: 6,
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: 'rgba(0,0,0,0.2)',
+                            color: 'white',
+                            fontSize: '0.9em'
+                        }}
+                    />
+                    {filterQuery && (
+                        <button
+                            onClick={() => setFilterQuery('')}
+                            style={{
+                                position: 'absolute',
+                                right: 10,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                cursor: 'pointer',
+                                display: 'flex'
+                            }}
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
+
                 {loading ? <p>Loading remote files...</p> : (
-                    <div className="table-wrap">
-                        <table>
+                    <div
+                        className="table-wrap"
+                        onClick={() => setHighlightedPath(null)}
+                        style={{ minHeight: 300 }} // Ensure clickable area
+                    >
+                        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                             <thead>
                                 <tr>
                                     <th style={{ width: 40 }}></th>
-                                    <th>Name</th>
-                                    <th>Size</th>
+                                    <th onClick={() => handleSort('name')}>
+                                        <div style={headerStyle}>Name <SortIcon columnKey="name" /></div>
+                                    </th>
+                                    <th onClick={() => handleSort('size')}>
+                                        <div style={headerStyle}>Size <SortIcon columnKey="size" /></div>
+                                    </th>
+                                    <th onClick={() => handleSort('mtime')}>
+                                        <div style={headerStyle}>Date Modified <SortIcon columnKey="mtime" /></div>
+                                    </th>
+                                    <th onClick={() => handleSort('atime')}>
+                                        <div style={headerStyle}>Last Accessed <SortIcon columnKey="atime" /></div>
+                                    </th>
                                     <th style={{ textAlign: 'right' }}>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {files.map(file => (
-                                    <tr key={file.name}>
-                                        <td>{file.type === 'folder' ? <Folder color="var(--primary)" size={20} /> : <FileText color="var(--text-muted)" size={20} />}</td>
-                                        <td>
-                                            {file.type === 'folder' ? (
-                                                <button onClick={() => handleNavigate(file.path)} style={{ fontWeight: 500, color: 'var(--text-main)' }}>
-                                                    {file.name}
-                                                </button>
-                                            ) : (
-                                                <span>{file.name}</span>
-                                            )}
-                                        </td>
-                                        <td style={{ fontSize: '0.9em', color: 'var(--text-muted)' }}>
-                                            {
-                                                file.type === 'folder'
-                                                    ? (folderSizes[file.path] !== undefined ? formatBytes(folderSizes[file.path]) : '-')
-                                                    : formatBytes(file.size)
-                                            }
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <button onClick={() => openSyncModal(file)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-                                                <Download size={14} /> Sync
-                                            </button>
+                                {filteredFiles.length === 0 && !loading && (
+                                    <tr>
+                                        <td colSpan={6} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>
+                                            {filterQuery ? 'No matching files found' : 'Empty directory'}
                                         </td>
                                     </tr>
-                                ))}
+                                )}
+                                {filteredFiles.map((file, index) => {
+                                    const isSelected = highlightedPath === file.path;
+                                    return (
+                                        <tr
+                                            key={file.name}
+                                            id={`file-row-${index}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setHighlightedPath(file.path);
+                                            }}
+                                            onDoubleClick={() => {
+                                                if (file.type === 'folder') {
+                                                    handleNavigate(file.path);
+                                                }
+                                            }}
+                                            style={{
+                                                cursor: 'pointer',
+                                                background: isSelected ? 'rgba(50, 150, 255, 0.1)' : 'transparent',
+                                                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                transition: 'background 0.1s'
+                                            }}
+                                            className="file-row"
+                                        >
+                                            <td>{file.type === 'folder' ? <Folder color={isSelected ? 'var(--primary)' : "var(--primary)"} size={20} /> : <FileText color="var(--text-muted)" size={20} />}</td>
+                                            <td>
+                                                <span style={{
+                                                    fontWeight: file.type === 'folder' ? 500 : 400,
+                                                    color: isSelected ? 'white' : 'var(--text-main)'
+                                                }}>
+                                                    {file.name}
+                                                </span>
+                                            </td>
+                                            <td style={{ fontSize: '0.9em', color: 'var(--text-muted)' }}>
+                                                {
+                                                    file.type === 'folder'
+                                                        ? (folderSizes[file.path] !== undefined ? formatBytes(folderSizes[file.path]) : '-')
+                                                        : formatBytes(file.size)
+                                                }
+                                            </td>
+                                            <td style={{ fontSize: '0.9em', color: 'var(--text-muted)' }}>
+                                                {formatDate(file.mtime)}
+                                            </td>
+                                            <td style={{ fontSize: '0.9em', color: 'var(--text-muted)' }}>
+                                                {formatDate(file.atime)}
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <button
+                                                    id={`sync-btn-${index}`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openSyncModal(file);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Tab') {
+                                                            e.preventDefault();
+                                                            searchInputRef.current?.focus();
+                                                        }
+                                                    }}
+                                                    className="btn btn-secondary"
+                                                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                                                >
+                                                    <Download size={14} /> Sync
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

@@ -72,7 +72,8 @@ function listRemote(path = '/') {
                         name: item.filename,
                         type: item.attrs.isDirectory() ? 'folder' : 'file',
                         size: item.attrs.size,
-                        mtime: item.attrs.mtime,
+                        mtime: item.attrs.mtime * 1000, // Convert to ms
+                        atime: item.attrs.atime * 1000, // Convert to ms
                         path: path === '/' ? `/${item.filename}` : `${path}/${item.filename}`
                     }));
                     resolve(formatted);
