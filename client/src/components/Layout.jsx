@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Home, FolderSearch, Settings, Activity, CloudLightning, Sliders } from 'lucide-react';
+import { Home, FolderSearch, Activity, Sliders } from 'lucide-react';
 
 export default function Layout({ children }) {
     const navItems = [
@@ -13,10 +13,8 @@ export default function Layout({ children }) {
         <div className="app-container">
             <aside className="sidebar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px 24px' }}>
-                    <div style={{ padding: 8, background: 'var(--primary)', borderRadius: 8 }}>
-                        <CloudLightning color="white" size={24} />
-                    </div>
-                    <h1 style={{ fontSize: '1.2rem', fontWeight: 800 }}>SyncWave</h1>
+                    <img src="/logo.svg" alt="SyncPane" style={{ width: 40, height: 40 }} />
+                    <h1 style={{ fontSize: '1.2rem', fontWeight: 800 }}>SyncPane</h1>
                 </div>
 
                 <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
