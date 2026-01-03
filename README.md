@@ -8,7 +8,8 @@ A modern web application to sync folders from a remote server to your local file
 - **Selective Sync**: Choose specific files or folders to sync.
 - **Job Queue**: Monitor sync progress, reorder priority, and view history.
 - **Resiliency**: Auto-retries, connection checks, and clean error handling.
-- **Scheduling**: Automatic hourly sync checks (remote takes precedence).
+- **Scheduling**: Automatic hourly sync checks or custom Cron expressions.
+- **Global Settings**: Master sync toggle, custom frequency, and favorite paths management.
 - **Configuration**: securely store credentials (encrypted).
 
 ## Quick Start (Docker)

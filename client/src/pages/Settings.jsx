@@ -159,10 +159,19 @@ export default function Settings() {
         fetch('http://localhost:3001/api/sync-locations').then(res => res.json()).then(setLocations);
     };
 
-    const deleteLocation = async (id) => {
-        if (!confirm('Are you sure you want to remove this favorite path?')) return;
-        await fetch(`http://localhost:3001/api/sync-locations/${id}`, { method: 'DELETE' });
-        fetchLocations();
+    const deleteLocation = (id) => {
+        setModalConfig({
+            isOpen: true,
+            title: 'Remove Favorite Path?',
+            message: 'Are you sure you want to remove this favorite local path?',
+            confirmLabel: 'Remove',
+            isDestructive: true,
+            onConfirm: async () => {
+                await fetch(`http://localhost:3001/api/sync-locations/${id}`, { method: 'DELETE' });
+                fetchLocations();
+                setModalConfig(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
     return (
