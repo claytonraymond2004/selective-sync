@@ -11,6 +11,7 @@ export default function Jobs() {
     const [itemsPerPage, setItemsPerPage] = useState(25);
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
+    const [jobStats, setJobStats] = useState({ active: 0, paused: 0 });
 
     const fetchJobs = async () => {
         try {
@@ -26,12 +27,31 @@ export default function Jobs() {
                 setJobs(data.data);
                 setTotalPages(data.pagination.totalPages);
                 setTotalItems(data.pagination.total);
+                if (data.stats) setJobStats(data.stats);
             } else {
                 // Fallback for older API response if needed, though we just changed it
                 setJobs(data);
             }
         } catch (err) {
             console.error(err);
+        }
+    };
+
+    const pauseAll = async () => {
+        try {
+            await fetch('http://localhost:3001/api/jobs/pause-all', { method: 'POST' });
+            fetchJobs();
+        } catch (err) {
+            console.error('Failed to pause all:', err);
+        }
+    };
+
+    const resumeAll = async () => {
+        try {
+            await fetch('http://localhost:3001/api/jobs/resume-all', { method: 'POST' });
+            fetchJobs();
+        } catch (err) {
+            console.error('Failed to resume all:', err);
         }
     };
 
@@ -179,6 +199,35 @@ export default function Jobs() {
                         <option value={50}>50</option>
                         <option value={100}>100</option>
                     </select>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        onClick={pauseAll}
+                        disabled={jobStats.active === 0}
+                        className="btn btn-secondary"
+                        style={{
+                            display: 'flex', gap: 6, alignItems: 'center',
+                            opacity: jobStats.active === 0 ? 0.5 : 1,
+                            cursor: jobStats.active === 0 ? 'not-allowed' : 'pointer'
+                        }}
+                    >
+                        <Pause size={16} />
+                        Pause All
+                    </button>
+                    <button
+                        onClick={resumeAll}
+                        disabled={jobStats.paused === 0}
+                        className="btn btn-primary"
+                        style={{
+                            display: 'flex', gap: 6, alignItems: 'center',
+                            opacity: jobStats.paused === 0 ? 0.5 : 1,
+                            cursor: jobStats.paused === 0 ? 'not-allowed' : 'pointer'
+                        }}
+                    >
+                        <Play size={16} />
+                        Start All
+                    </button>
                 </div>
             </div>
 

@@ -378,6 +378,15 @@ app.get('/api/jobs', (req, res) => {
         `;
         const total = db.prepare(countQuery).get(...params).count;
 
+        // 3. Get Global Stats for UI Actions (Pause All / Resume All)
+        // We need to know if *any* jobs exist in these states, regardless of search filter
+        const stats = db.prepare(`
+            SELECT 
+                SUM(CASE WHEN status IN ('running', 'queued', 'pausing') THEN 1 ELSE 0 END) as activeCount,
+                SUM(CASE WHEN status IN ('paused', 'pausing') THEN 1 ELSE 0 END) as pausedCount
+            FROM jobs
+        `).get();
+
         res.json({
             data: rows,
             pagination: {
@@ -385,6 +394,10 @@ app.get('/api/jobs', (req, res) => {
                 limit,
                 total,
                 totalPages: Math.ceil(total / limit)
+            },
+            stats: {
+                active: stats.activeCount || 0,
+                paused: stats.pausedCount || 0
             }
         });
     } catch (err) {
@@ -475,6 +488,38 @@ app.post('/api/jobs/:id/pause', (req, res) => {
 app.post('/api/jobs/:id/resume', (req, res) => {
     try {
         resumeJob(req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/jobs/pause-all', (req, res) => {
+    try {
+        // 1. Pause running/pausing jobs (individually to trigger controllers)
+        const activeJobs = db.prepare("SELECT id FROM jobs WHERE status IN ('running', 'pausing')").all();
+        activeJobs.forEach(job => {
+            try { pauseJob(job.id); } catch (e) { console.error(`Failed to pause job ${job.id}`, e); }
+        });
+
+        // 2. Pause queued jobs (bulk update is safe for queued)
+        db.prepare("UPDATE jobs SET status = 'paused', log = 'Paused by user (Global)' WHERE status = 'queued'").run();
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/jobs/resume-all', (req, res) => {
+    try {
+        // 1. Resume paused/pausing jobs
+        // We need to use resumeJob for all to ensure controllers are updated if 'pausing'
+        const pausedJobs = db.prepare("SELECT id FROM jobs WHERE status IN ('paused', 'pausing')").all();
+        pausedJobs.forEach(job => {
+            try { resumeJob(job.id); } catch (e) { console.error(`Failed to resume job ${job.id}`, e); }
+        });
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
