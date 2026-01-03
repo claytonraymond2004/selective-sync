@@ -7,7 +7,7 @@ COPY client/ ./
 RUN npm run build
 
 # Stage 2: Backend & Runtime
-FROM node:18-alpine
+FROM node:22-alpine
 WORKDIR /app
 # Install build dependencies for native modules (better-sqlite3)
 RUN apk add --no-cache python3 make g++

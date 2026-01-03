@@ -69,7 +69,9 @@ app.get('/api/config', (req, res) => {
         port: config.port,
         username: config.username,
         hasPassword: !!config.password,
-        hasKey: !!config.privateKey
+        hasPassword: !!config.password,
+        hasKey: !!config.privateKey,
+        isEnv: !!config.isEnv
     });
 });
 

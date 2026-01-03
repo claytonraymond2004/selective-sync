@@ -18,7 +18,10 @@ function getConnectionConfig() {
     });
 
     // If env vars are set, they override DB (docker .env use case)
-    if (process.env.REMOTE_HOST) config.host = process.env.REMOTE_HOST;
+    if (process.env.REMOTE_HOST) {
+        config.host = process.env.REMOTE_HOST;
+        config.isEnv = true;
+    }
     if (process.env.REMOTE_PORT) config.port = parseInt(process.env.REMOTE_PORT, 10);
     if (process.env.REMOTE_USER) config.username = process.env.REMOTE_USER;
     if (process.env.REMOTE_PASSWORD) config.password = process.env.REMOTE_PASSWORD; // Assumed plain in env for docker
