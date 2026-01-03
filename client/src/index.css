@@ -235,13 +235,15 @@ tr:last-child td {
 }
 
 .status-pending,
-.status-queued {
+.status-queued,
+.status-paused {
   color: #fbbf24;
   background: rgba(251, 191, 36, 0.1);
 }
 
 .status-error,
-.status-failed {
+.status-failed,
+.status-cancelled {
   color: #f87171;
   background: rgba(248, 113, 113, 0.1);
 }
