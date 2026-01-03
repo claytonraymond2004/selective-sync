@@ -177,7 +177,7 @@ export default function Dashboard() {
                             </thead>
                             <tbody>
                                 {items.map(item => (
-                                    <tr key={item.id} style={{ opacity: (liveDiffs[item.id]?.status === 'synced' || (item.active && liveDiffs[item.id]?.status !== 'local_missing')) ? 1 : 0.5 }}>
+                                    <tr key={item.id} style={{ opacity: (liveDiffs[item.id]?.status === 'synced' || liveDiffs[item.id]?.status === 'outdated' || (item.active && liveDiffs[item.id]?.status !== 'local_missing')) ? 1 : 0.5 }}>
                                         <td>{item.type === 'folder' ? '📁' : '📄'}</td>
                                         <td style={{ fontFamily: 'monospace' }}>{item.remote_path}</td>
                                         <td style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{item.local_path}</td>
