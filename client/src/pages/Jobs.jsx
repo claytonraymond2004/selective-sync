@@ -241,7 +241,7 @@ export default function Jobs() {
                                 <tr>
                                     <th style={{ width: 110 }}>Status</th>
                                     <th style={{ width: '30%' }}>Progress</th>
-                                    <th style={{ width: 100 }}>Duration</th>
+                                    <th style={{ width: 105 }}>Duration</th>
                                     <th style={{ width: '30%' }}>File/Folder</th>
                                     <th style={{ width: 160 }}>Started</th>
                                     <th style={{ textAlign: 'right', width: 140 }}>Actions</th>
