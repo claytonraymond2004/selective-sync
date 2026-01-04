@@ -1,7 +1,7 @@
 services:
   app:
-    image: ghcr.io/claytonraymond2004/selective-sync:latest
-    container_name: selective-sync
+    image: ghcr.io/claytonraymond2004/syncpane:latest
+    container_name: syncpane
     restart: unless-stopped
     ports:
       - "3001:3001"

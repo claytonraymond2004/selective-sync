@@ -1,7 +1,7 @@
 services:
   app:
     build: .
-    container_name: selective-sync
+    container_name: syncpane
     restart: unless-stopped
     ports:
       - "3001:3001"

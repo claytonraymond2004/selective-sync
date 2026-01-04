@@ -1,4 +1,4 @@
-# Selective Sync Web App
+# SyncPane
 
 A modern web application to sync folders from a remote server to your local file system via SSH/SFTP. Features a premium UI, job queuing, scheduling, and connection resiliency.
 
@@ -17,8 +17,8 @@ A modern web application to sync folders from a remote server to your local file
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/claytonraymond2004/selective-sync.git
-    cd selective-sync
+    git clone https://github.com/claytonraymond2004/SyncPane.git
+    cd SyncPane
     ```
 
 2.  **Configure Environment:**

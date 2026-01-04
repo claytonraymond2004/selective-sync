@@ -1,7 +1,7 @@
 services:
   backend:
     image: node:22-alpine
-    container_name: selective-sync-backend-dev
+    container_name: syncpane-backend-dev
     working_dir: /app/server
     command: sh -c "apk add --no-cache python3 make g++ && npm install && npm run dev"
     ports:
@@ -20,7 +20,7 @@ services:
 
   frontend:
     image: node:22-alpine
-    container_name: selective-sync-frontend-dev
+    container_name: syncpane-frontend-dev
     working_dir: /app/client
     # Vite requires host binding to be accessible from outside container
     command: sh -c "npm install && npm run dev -- --host"
