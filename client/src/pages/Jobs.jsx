@@ -236,15 +236,15 @@ export default function Jobs() {
 
                 <div className="card">
                     <div className="table-wrap">
-                        <table>
+                        <table className="fixed-table">
                             <thead>
                                 <tr>
-                                    <th>Status</th>
+                                    <th style={{ width: 110 }}>Status</th>
                                     <th style={{ width: '30%' }}>Progress</th>
-                                    <th>Duration</th>
-                                    <th>File/Folder</th>
-                                    <th>Started</th>
-                                    <th style={{ textAlign: 'right' }}>Actions</th>
+                                    <th style={{ width: 100 }}>Duration</th>
+                                    <th style={{ width: '30%' }}>File/Folder</th>
+                                    <th style={{ width: 160 }}>Started</th>
+                                    <th style={{ textAlign: 'right', width: 140 }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>

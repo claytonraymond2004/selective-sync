@@ -520,22 +520,22 @@ export default function Browser() {
                         onClick={() => setHighlightedPath(null)}
                         style={{ minHeight: 300 }} // Ensure clickable area
                     >
-                        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                        <table className="fixed-table" style={{ borderCollapse: 'collapse', width: '100%' }}>
                             <thead>
                                 <tr>
-                                    <th onClick={() => handleSort('name')}>
+                                    <th onClick={() => handleSort('name')} style={{ width: '40%' }}>
                                         <div style={headerStyle}>Name <SortIcon columnKey="name" /></div>
                                     </th>
-                                    <th onClick={() => handleSort('size')}>
+                                    <th onClick={() => handleSort('size')} style={{ width: 100 }}>
                                         <div style={headerStyle}>Size <SortIcon columnKey="size" /></div>
                                     </th>
-                                    <th onClick={() => handleSort('mtime')}>
+                                    <th onClick={() => handleSort('mtime')} style={{ width: 160 }}>
                                         <div style={headerStyle}>Date Modified <SortIcon columnKey="mtime" /></div>
                                     </th>
-                                    <th onClick={() => handleSort('atime')}>
+                                    <th onClick={() => handleSort('atime')} style={{ width: 160 }}>
                                         <div style={headerStyle}>Last Accessed <SortIcon columnKey="atime" /></div>
                                     </th>
-                                    <th style={{ textAlign: 'right' }}>Action</th>
+                                    <th style={{ textAlign: 'right', width: 100 }}>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -582,16 +582,14 @@ export default function Browser() {
                                                         fontWeight: file.type === 'folder' ? 500 : 400,
                                                         color: isSelected ? 'white' : 'var(--text-main)',
                                                         flex: 1,
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        whiteSpace: 'nowrap',
+                                                        overflowWrap: 'break-word',
                                                         marginRight: 8
                                                     }}>
                                                         {file.name}
                                                     </span>
                                                     {file.type === 'folder' && (
                                                         <button
-                                                            className="btn-icon"
+                                                            className="btn-icon mobile-only"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 handleNavigate(file.path);

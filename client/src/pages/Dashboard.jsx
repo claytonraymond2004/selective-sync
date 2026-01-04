@@ -276,15 +276,15 @@ export default function Dashboard() {
                         </div>
                     ) : (
                         <div className="table-wrap">
-                            <table>
+                            <table className="fixed-table">
                                 <thead>
                                     <tr>
-                                        <th style={{ width: 50 }}>Type</th>
-                                        <th>Remote Path</th>
-                                        <th>Local Path</th>
-                                        <th>Status</th>
-                                        <th>Last Synced</th>
-                                        <th style={{ textAlign: 'right' }}>Actions</th>
+                                        <th style={{ width: 60 }}>Type</th>
+                                        <th style={{ width: '25%' }}>Remote Path</th>
+                                        <th style={{ width: '25%' }}>Local Path</th>
+                                        <th style={{ width: 120 }}>Status</th>
+                                        <th style={{ width: 160 }}>Last Synced</th>
+                                        <th style={{ textAlign: 'right', width: 160 }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
