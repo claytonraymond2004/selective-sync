@@ -279,7 +279,7 @@ export default function Dashboard() {
                             <table className="fixed-table">
                                 <thead>
                                     <tr>
-                                        <th style={{ width: 60 }}>Type</th>
+                                        <th style={{ width: 65 }}>Type</th>
                                         <th style={{ width: '25%' }}>Remote Path</th>
                                         <th style={{ width: '25%' }}>Local Path</th>
                                         <th style={{ width: 120 }}>Status</th>
